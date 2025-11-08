@@ -26,9 +26,14 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             execution += intr;
             current_time = time;
 
-            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr]) + ", SYSCALL ISR (ADD STEPS HERE)\n";
-            current_time += delays[duration_intr];
+            // running isr
+            execution += std::to_string(current_time) + ", 30, SYSCALL: run ISR (driver for device " + std::to_string(duration_intr) + ")\n";
+            current_time += 30;
 
+            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr] - 30) + ", device " + std::to_string(duration_intr) + ", performing I/O (device busy)\n";
+            current_time += delays[duration_intr] - 30;
+
+            // ret
             execution +=  std::to_string(current_time) + ", 1, IRET\n";
             current_time += 1;
         } else if(activity == "END_IO") {
@@ -36,9 +41,14 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             current_time = time;
             execution += intr;
 
-            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr]) + ", ENDIO ISR(ADD STEPS HERE)\n";
-            current_time += delays[duration_intr];
+            // running isr
+            execution += std::to_string(current_time) + ", 30, ENDIO: run ISR (driver for device " + std::to_string(duration_intr) + ")\n";
+            current_time += 30;
 
+            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr] - 30) + ", device " + std::to_string(duration_intr) + ", finished IO\n";
+            current_time += delays[duration_intr] - 30;
+
+            // ret
             execution +=  std::to_string(current_time) + ", 1, IRET\n";
             current_time += 1;
         } else if(activity == "FORK") {
@@ -54,16 +64,16 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             current_time += duration_intr; //Duration comes from the trace file
 
             //Create child PCB that inherrits most of parent's PCB
-            PCB child_pcb = current;
-            child_pcb.PID = next_pid; //Assign new PID from global counter
-            child_pcb.PPID = current.PID; //Set parent PID
+            PCB child_pcb(next_pid, (int)current.PID,current.program_name, current.size, -1);
             next_pid++; //Increment global PID counter
+
+            if (!allocate_memory(&child_pcb)) {
+                execution += "ERROR! No suitable partition found for " + program_name + "\n";
+                break;
+            }
 
             //The child runs first, so move parent to wait queue
             wait_queue.push_back(current);
-
-            //Set the child as the current process
-            current = child_pcb;
 
             //Call scheduler
             execution += std::to_string(current_time) + ", 0, scheduler called\n";
@@ -73,7 +83,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             current_time++;
 
             system_status += "time: " + std::to_string(current_time) + "; current trace: " + trace + "\n";
-            system_status += print_PCB(current, wait_queue);
+            system_status += print_PCB(child_pcb, wait_queue);
             
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -113,22 +123,20 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the child's trace, run the child (HINT: think recursion)
-            auto[child_execution, child_system_status, child_end_time] = simulate_trace(child_trace, current_time, vectors, delays, external_files, current, wait_queue, next_pid);
+            if(!child_trace.empty()) {
+                auto[child_execution, child_system_status, child_end_time] = simulate_trace(child_trace, current_time, vectors, delays, external_files, child_pcb, wait_queue, next_pid);
 
-            // Update master with all of children's execution information
-            execution += child_execution;
-            system_status += child_system_status;
-            current_time = child_end_time;
+                // Update master with all of children's execution information
+                execution += child_execution;
+                system_status += child_system_status;
+                current_time = child_end_time;
 
-            // Children is donefor, so get parent again
-            if (!wait_queue.empty()) {
-                current = wait_queue.front();
-                wait_queue.erase(wait_queue.begin());
+                // Children is donefor, so get parent again
+                if (!wait_queue.empty()) {
+                    current = wait_queue.back();
+                    wait_queue.pop_back();
+                }
             }
-
-            execution += std::to_string(current_time) + ", 0, scheduler called\n";
-            execution += std::to_string(current_time) + ", 1, IRET\n";
-            current_time += 1;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -156,7 +164,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             //"allocate_memory" finds and marks the partition
             if (!allocate_memory(&current)) {
                 execution += "ERROR! No suitable partition found for " + program_name + "\n";
-                break;
+                continue;
             }
 
             int mark_partition_time = 3; //Using 3ms
@@ -173,16 +181,15 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             execution += std::to_string(current_time) + ", " + std::to_string(update_pcb_time) + ", updating PCB\n";
             current_time += update_pcb_time;
 
-            //Call scheduler
-            execution += std::to_string(current_time) + ", 0, scheduler called\n"; //Current time does not increment
-            
-            //Return from ISR
-            execution += std::to_string(current_time) + ", 1, IRET\n";
-            current_time += 1;
-
             system_status += "time: " + std::to_string(current_time) + "; current trace: " + trace + "\n";
             system_status += print_PCB(current, wait_queue);
 
+            //Call scheduler
+            execution += std::to_string(current_time) + ", 0, scheduler called\n";
+
+            //Return from ISR
+            execution += std::to_string(current_time) + ", 1, IRET\n";
+            current_time += 1;
             ///////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -196,24 +203,14 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the exec's trace (i.e. trace of external program), run the exec (HINT: think recursion)
-            //TODO FIX
-            //auto[exec_execution, exec_system_status, exec_end_time] = simulate_trace(exec_traces, current_time, vectors, delays, external_files, current, wait_queue, next_pid);
+            if (!exec_traces.empty()) {
+                auto[exec_execution, exec_system_status, exec_end_time] = simulate_trace(exec_traces, current_time, vectors, delays, external_files, current, wait_queue, next_pid);
 
-            // Update master with recursive exec traces
-            //execution += exec_execution;
-            //system_status += exec_system_status;
-            //current_time = exec_end_time;
-
-            // Replace current with parent
-            if (!wait_queue.empty()) {
-                current = wait_queue.front();
-                wait_queue.erase(wait_queue.begin());
+                // Update master with recursive exec traces
+                execution += exec_execution;
+                system_status += exec_system_status;
+                current_time = exec_end_time;
             }
-
-            execution += std::to_string(current_time) + ", 0, scheduler called\n";
-            execution += std::to_string(current_time) + ", 1, IRET\n";
-            current_time += 1;
-
             ///////////////////////////////////////////////////////////////////////////////////////////
 
             break; //Why is this important? (answer in report)
@@ -248,12 +245,6 @@ int main(int argc, char** argv) {
     std::vector<PCB> wait_queue;
 
     /******************ADD YOUR VARIABLES HERE*************************/
-    // Make PCB table w/ resizing
-    std::vector<PCB> pcb_table;
-    pcb_table.reserve(10);
-
-    // Store init process into PCB
-    pcb_table[0] = current;
 
 
     /******************************************************************/
