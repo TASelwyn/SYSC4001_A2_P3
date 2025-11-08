@@ -7,9 +7,7 @@
 
 #include<interrupts.hpp>
 
-std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string> trace_file, int time, std::vector<std::string> vectors, std::vector<int> delays, std::vector<external_file> external_files, PCB current, std::vector<PCB> wait_queue) {
-
-    std::string trace;      //!< string to store single line of trace file
+std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string> trace_file, int time, std::vector<std::string> vectors, std::vector<int> delays, std::vector<external_file> external_files, PCB& current, std::vector<PCB>& wait_queue, unsigned int& next_pid) {    std::string trace;      //!< string to store single line of trace file
     std::string execution = "";  //!< string to accumulate the execution output
     std::string system_status = "";  //!< string to accumulate the system status output
     int current_time = time;
@@ -105,7 +103,47 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             ///////////////////////////////////////////////////////////////////////////////////////////
             //Add your EXEC output here
 
+            //Get program size from external files list
+            unsigned int program_size = get_size(program_name, external_files);
+            execution += std::to_string(current_time) + ", " + std::to_string(duration_intr) + ", Program is " + std::to_string(program_size) + " Mb large\n";
+            current_time += duration_intr;
 
+            //Free old partition and find a new one. Exec replaces the current process, so free its old memory first
+            free_memory(&current);
+
+            //Update the PCB with new program info before allocating
+            current.program_name = program_name;
+            current.size = program_size;
+
+            //"allocate_memory" finds and marks the partition
+            if (!allocate_memory(&current)) {
+                execution += "ERROR! No sutiable partiton found for " + program_name + "\n";
+                break;
+            }
+
+            int mark_partition_time = 3; //Using 3ms
+            execution += std::to_string(current_time) + ", " + std::to_string(mark_partition_time) + ", marking partition " + std::to_string(current.partition_number) + " as occupied\n";
+            current_time += mark_partition_time;
+
+            //Simulate loader (15ms per MB)
+            int loading_time = program_size * 15;
+            execution += std::to_string(current_time) + ", " + std::to_string(loading_time) + ", loading program into memory\n";
+            current_time += loading_time;
+
+            //Update PCB
+            int update_pcb_time = 6; //Using 6ms
+            execution += std::to_string(current_time) + ", " + std::to_string(update_pcb_time) + ", updating PCB\n";
+            current_time += update_pcb_time;
+
+            //Call scheduler
+            execution += std::to_string(current_time) + ", 0, scheduler called\n"; //Current time does not increment
+            
+            //Return from ISR
+            execution += std::to_string(current_time) + ", 1, IRET\n";
+            current_time += 1;
+
+            system_status += "time: " + std::to_string(current_time) + "; current trace: " + trace + "\n";
+            system_status += print_PCB(current, wait_queue);
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -167,13 +205,15 @@ int main(int argc, char** argv) {
         trace_file.push_back(trace);
     }
 
+    unsigned int next_pid = 1; //PID 0 is init
     auto [execution, system_status, _] = simulate_trace(   trace_file, 
                                             0, 
                                             vectors, 
                                             delays,
                                             external_files, 
                                             current, 
-                                            wait_queue);
+                                            wait_queue,
+                                            next_pid);
 
     input_file.close();
 
