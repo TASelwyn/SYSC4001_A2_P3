@@ -113,8 +113,22 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the child's trace, run the child (HINT: think recursion)
+            auto[child_execution, child_system_status, child_end_time] = simulate_trace(child_trace, current_time, vectors, delays, external_files, current, wait_queue, next_pid);
 
+            // Update master with all of children's execution information
+            execution += child_execution;
+            system_status += child_system_status;
+            current_time = child_end_time;
 
+            // Children is donefor, so get parent again
+            if (!wait_queue.empty()) {
+                current = wait_queue.front();
+                wait_queue.erase(wait_queue.begin());
+            }
+
+            execution += std::to_string(current_time) + ", 0, scheduler called\n";
+            execution += std::to_string(current_time) + ", 1, IRET\n";
+            current_time += 1;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -141,7 +155,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             //"allocate_memory" finds and marks the partition
             if (!allocate_memory(&current)) {
-                execution += "ERROR! No sutiable partiton found for " + program_name + "\n";
+                execution += "ERROR! No suitable partition found for " + program_name + "\n";
                 break;
             }
 
@@ -182,8 +196,23 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the exec's trace (i.e. trace of external program), run the exec (HINT: think recursion)
+            //TODO FIX
+            //auto[exec_execution, exec_system_status, exec_end_time] = simulate_trace(exec_traces, current_time, vectors, delays, external_files, current, wait_queue, next_pid);
 
+            // Update master with recursive exec traces
+            //execution += exec_execution;
+            //system_status += exec_system_status;
+            //current_time = exec_end_time;
 
+            // Replace current with parent
+            if (!wait_queue.empty()) {
+                current = wait_queue.front();
+                wait_queue.erase(wait_queue.begin());
+            }
+
+            execution += std::to_string(current_time) + ", 0, scheduler called\n";
+            execution += std::to_string(current_time) + ", 1, IRET\n";
+            current_time += 1;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 

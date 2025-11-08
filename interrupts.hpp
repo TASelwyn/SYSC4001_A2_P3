@@ -224,6 +224,7 @@ std::pair<std::string, int> intr_boilerplate(int current_time, int intr_num, int
 //Writes a string to a file
 void write_output(std::string execution, const char* filename) {
     std::ofstream output_file(filename);
+    std::string filename_string(filename);
 
     if (output_file.is_open()) {
         output_file << execution;
@@ -233,7 +234,7 @@ void write_output(std::string execution, const char* filename) {
         std::cerr << "Error opening file!" << std::endl;
     }
 
-    std::cout << "Output generated in execution.txt" << std::endl;
+    std::cout << "Output generated in " << filename_string << std::endl;
 }
 
 //Helper function for a sanity check. Prints the external files table
