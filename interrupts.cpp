@@ -216,13 +216,6 @@ int main(int argc, char** argv) {
         std::cerr << "ERROR! Memory allocation failed!" << std::endl;
     }
 
-    // Initialize memory partitions to "free" as the header starts them as "empty"
-    for (int i = 0; i < 5; i++) {
-        if (memory[i].code == "empty") {
-            memory[i].code = "free";
-        }
-    }
-
     std::vector<PCB> wait_queue;
 
     /******************ADD YOUR VARIABLES HERE*************************/
