@@ -199,15 +199,16 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Make PCB table w/ resizing using vector
     std::vector<PCB> wait_queue;
 
     /******************ADD YOUR VARIABLES HERE*************************/
-     // default to 10
-    wait_queue.reserve(10);
+    // Make PCB table w/ resizing
+    std::vector<PCB> pcb_table;
+    pcb_table.reserve(10);
 
     // Store init process into PCB
-    wait_queue[0] = current;
+    pcb_table[0] = current;
+
 
     /******************************************************************/
 
