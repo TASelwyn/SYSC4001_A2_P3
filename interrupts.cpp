@@ -49,8 +49,32 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             ///////////////////////////////////////////////////////////////////////////////////////////
             //Add your FORK output here
 
+            //ISR copies PCB info
+            execution += std::to_string(current_time) + ", " + std::to_string(duration_intr) + ", cloning the PCB\n";
+            current_time += duration_intr; //Duration comes from the trace file
 
+            //Create child PCB that inherrits most of parent's PCB
+            PCB child_pcb = current;
+            child_pcb.PID = next_pid; //Assign new PID from global counter
+            child_pcb.PPID = current.PID; //Set parent PID
+            next_pid++; //Increment global PID counter
 
+            //The child runs first, so move parent to wait queue
+            wait_queue.push_back(current);
+
+            //Set the child as the current process
+            current = child_pcb;
+
+            //Call scheduler
+            execution += std::to_string(current_time) + ", 0, scheduler called\n";
+
+            //Return from ISR
+            execution += std::to_string(current_time) + ", 1, IRET\n";
+            current_time++;
+
+            system_status += "time: " + std::to_string(current_time) + "; current trace: " + trace + "\n";
+            system_status += print_PCB(current, wait_queue);
+            
             ///////////////////////////////////////////////////////////////////////////////////////////
 
             //The following loop helps you do 2 things:
