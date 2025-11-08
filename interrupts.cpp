@@ -85,22 +85,24 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             bool exec_flag = false;
             int parent_index = 0;
 
-            for(size_t j = i; j < trace_file.size(); j++) {
+            for(size_t j = i + 1; j < trace_file.size(); j++) {
                 auto [_activity, _duration, _pn] = parse_trace(trace_file[j]);
                 if(skip && _activity == "IF_CHILD") {
                     skip = false;
                     continue;
                 } else if(_activity == "IF_PARENT"){
                     skip = true;
-                    parent_index = j;
+                    if (parent_index == 0) parent_index = j;
                     if(exec_flag) {
                         break;
                     }
                 } else if(skip && _activity == "ENDIF") {
                     skip = false;
+                    if (parent_index == 0) {
+                        parent_index = j;
+                    }
                     continue;
                 } else if(!skip && _activity == "EXEC") {
-                    skip = true;
                     child_trace.push_back(trace_file[j]);
                     exec_flag = true;
                 }
@@ -109,7 +111,12 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
                     child_trace.push_back(trace_file[j]);
                 }
             }
-            i = parent_index;
+
+            if (parent_index == 0) {
+                parent_index = trace_file.size();
+            }
+
+            i = parent_index - 1;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the child's trace, run the child (HINT: think recursion)
@@ -120,15 +127,16 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             system_status += child_system_status;
             current_time = child_end_time;
 
+            //Free the child's memory. 'current' is still the child PCB.
+            free_memory(&current);
+
             // Children is donefor, so get parent again
             if (!wait_queue.empty()) {
-                current = wait_queue.front();
-                wait_queue.erase(wait_queue.begin());
+                current = wait_queue.back(); //Restore parent from wait queue
+                wait_queue.pop_back(); //Remove parent from wait queue
+            } else {
+                execution += "ERROR! Parent process not found in wait queu!\n";
             }
-
-            execution += std::to_string(current_time) + ", 0, scheduler called\n";
-            execution += std::to_string(current_time) + ", 1, IRET\n";
-            current_time += 1;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -196,23 +204,13 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the exec's trace (i.e. trace of external program), run the exec (HINT: think recursion)
-            //TODO FIX
-            //auto[exec_execution, exec_system_status, exec_end_time] = simulate_trace(exec_traces, current_time, vectors, delays, external_files, current, wait_queue, next_pid);
+            
+            auto[exec_execution, exec_system_status, exec_end_time] = simulate_trace(exec_traces, current_time, vectors, delays, external_files, current, wait_queue, next_pid);
 
             // Update master with recursive exec traces
-            //execution += exec_execution;
-            //system_status += exec_system_status;
-            //current_time = exec_end_time;
-
-            // Replace current with parent
-            if (!wait_queue.empty()) {
-                current = wait_queue.front();
-                wait_queue.erase(wait_queue.begin());
-            }
-
-            execution += std::to_string(current_time) + ", 0, scheduler called\n";
-            execution += std::to_string(current_time) + ", 1, IRET\n";
-            current_time += 1;
+            execution += exec_execution;
+            system_status += exec_system_status;
+            current_time = exec_end_time;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -253,7 +251,7 @@ int main(int argc, char** argv) {
     pcb_table.reserve(10);
 
     // Store init process into PCB
-    pcb_table[0] = current;
+    pcb_table.push_back(current);
 
 
     /******************************************************************/
