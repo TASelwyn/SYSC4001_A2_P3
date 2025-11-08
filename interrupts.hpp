@@ -63,6 +63,21 @@ bool allocate_memory(PCB* current) {
     return false;
 }
 
+//Allocates a program to memory by partition (if there is space)
+//returns true if the allocation was successful, false if not.
+bool allocate_memory_partition(PCB* current, unsigned int partition_number) {
+    unsigned int part_index = partition_number - 1;
+
+    //check is the code will fit and if the partition is empty
+    if (memory[part_index].size >= current->size && memory[part_index].code == "empty") {
+        current->partition_number = memory[part_index].partition_number;
+        memory[part_index].code = current->program_name;
+        return true;
+    }
+
+    return false;
+}
+
 //frees the memory given PCB.
 void free_memory(PCB* process) {
     memory[process->partition_number - 1].code = "empty";
