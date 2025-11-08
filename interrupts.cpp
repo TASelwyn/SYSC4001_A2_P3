@@ -186,15 +186,28 @@ int main(int argc, char** argv) {
 
     //Make initial PCB (notice how partition is not assigned yet)
     PCB current(0, -1, "init", 1, -1);
+
     //Update memory (partition is assigned here, you must implement this function)
-    if(!allocate_memory(&current)) {
+    if(!allocate_memory_partition(&current, 6)) {
         std::cerr << "ERROR! Memory allocation failed!" << std::endl;
     }
 
+    // Initialize memory partitions to "free" as the header starts them as "empty"
+    for (int i = 0; i < 5; i++) {
+        if (memory[i].code == "empty") {
+            memory[i].code = "free";
+        }
+    }
+
+    // Make PCB table w/ resizing using vector
     std::vector<PCB> wait_queue;
 
     /******************ADD YOUR VARIABLES HERE*************************/
+     // default to 10
+    wait_queue.reserve(10);
 
+    // Store init process into PCB
+    wait_queue[0] = current;
 
     /******************************************************************/
 
